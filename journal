@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Journal App</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use Inter font family -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fce4ec; /* Soft Blush Background */
+        }
+        .journal-card {
+            /* Creamy Card Base */
+            background-color: #ffffff; 
+            box-shadow: 0 10px 15px -3px rgba(236, 64, 122, 0.1), 0 4px 6px -2px rgba(236, 64, 122, 0.05); /* Pink shadow */
+            transition: all 0.3s ease-in-out;
+            border-radius: 1rem; /* More rounded corners */
+        }
+        .journal-card:hover {
+            box-shadow: 0 20px 25px -5px rgba(236, 64, 122, 0.15), 0 10px 10px -5px rgba(236, 64, 122, 0.08);
+        }
+        /* Custom scrollbar for textareas */
+        textarea::-webkit-scrollbar {
+            width: 6px;
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background-color: #f8bbd0; /* Soft Pink Scrollbar */
+            border-radius: 3px;
+        }
+        
+        /* Heading and Text Color */
+        h1, h2 {
+            color: #ad1457; /* Deep Rose */
+        }
+        
+        /* Primary Button (Action/Next) */
+        .btn-primary {
+            background-color: #ff80ab; /* Medium Pink */
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            transition: background-color 0.2s;
+            font-weight: 600;
+        }
+        .btn-primary:hover {
+            background-color: #ec407a; /* Darker Pink on hover */
+        }
+
+        /* Secondary Button (Cancel/Back) */
+        .btn-secondary {
+            background-color: #f8bbd0; /* Light Pink */
+            color: #ad1457; /* Deep Rose text */
+            padding: 10px 20px;
+            border-radius: 8px;
+            transition: background-color 0.2s;
+            font-weight: 600;
+        }
+        .btn-secondary:hover {
+            background-color: #f48fb1; /* Medium Pink on hover */
+        }
+        
+        /* Input Field Focus */
+        input:focus, textarea:focus {
+            border-color: #ff80ab !important; /* Medium Pink border on focus */
+            box-shadow: 0 0 0 3px rgba(255, 128, 171, 0.4) !important; /* Soft Glow */
+        }
+
+        /* Dashboard List Items */
+        .bg-gray-50 {
+            background-color: #fffaf0; /* Creamy White */
+            border-color: #f8bbd0; /* Light Pink Border */
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <!-- Main Application Container -->
+    <div id="app" class="w-full max-w-2xl bg-white rounded-xl journal-card p-6 md:p-10 border border-gray-100">
+
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6 border-b pb-2">Digital Personal Journal</h1>
+        
+        <!-- Loading and Error State -->
+        <div id="status-message" class="text-center text-sm font-medium text-gray-500 mb-4">Application Ready.</div>
+
+        <!-- Dynamic Content Area -->
+        <div id="content-area">
+            <!-- Content will be rendered here based on the current step -->
+        </div>
+
+        <!-- User Information (Removed Firebase dependence) -->
+        <div class="mt-8 pt-4 border-t text-xs text-gray-400 text-center">
+            Data saved locally in your browser. | <a href="#" class="underline hover:text-gray-600" onclick="resetEntry()">Start Fresh</a>
+        </div>
+        
+    </div>
+
+    <script type="module">
+        // Application State
+        let currentPage = 'dashboard'; // dashboard, step1, step2, step3
+        let currentEntry = {}; // Holds data for the entry being created
+        let entries = []; // Array to hold fetched journal entries
+
+        const STORAGE_KEY = 'journalEntries';
+
+        // --- Local Storage Functions ---
+
+        /**
+         * Loads entries from localStorage.
+         */
+        function loadEntriesFromLocalStorage() {
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                return stored ? JSON.parse(stored) : [];
+            } catch (error) {
+                console.error("Error loading from local storage:", error);
+                return [];
+            }
+        }
+
+        /**
+         * Saves all entries to localStorage.
+         */
+        function saveEntriesToLocalStorage() {
+            try {
+                // Save the current state of the 'entries' array
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+            } catch (error) {
+                console.error("Error saving to local storage:", error);
+                document.getElementById('status-message').textContent = "Error: Local storage limit reached or inaccessible.";
+                document.getElementById('status-message').className = "text-center text-sm font-medium text-red-600 mb-4";
+            }
+        }
+
+        /**
+         * Initializes the app by loading existing data.
+         */
+        function setupLocalStorage() {
+            entries = loadEntriesFromLocalStorage();
+            renderUI();
+        }
+
+        // --- UI Rendering Functions ---
+
+        /**
+         * Renders the current state of the UI based on currentPage and collected data.
+         */
+        function renderUI() {
+            const contentArea = document.getElementById('content-area');
+            let html = '';
+
+            switch (currentPage) {
+                case 'dashboard':
+                    html = renderDashboard();
+                    break;
+                case 'step1':
+                    html = renderStep1();
+                    break;
+                case 'step2':
+                    html = renderStep2();
+                    break;
+                case 'step3':
+                    html = renderStep3();
+                    break;
+            }
+            contentArea.innerHTML = html;
+        }
+
+        /**
+         * Renders the Dashboard (list of entries).
+         */
+        function renderDashboard() {
+            const entryListHtml = entries.length > 0
+                ? entries.map(entry => `
+                    <li class="bg-gray-50 p-4 rounded-lg mb-2 border border-gray-200">
+                        <div class="font-semibold text-lg text-gray-800">${entry.title || 'Untitled Entry'}</div>
+                        <div class="text-sm text-gray-500 mb-2">${entry.summary || 'No summary provided.'}</div>
+                        <div class="text-xs text-gray-400">
+                            ${entry.timestamp ? new Date(entry.timestamp).toLocaleDateString() : 'N/A'}
+                        </div>
+                    </li>
+                `).join('')
+                : '<p class="text-center text-gray-500 italic">No entries found. Click "Start New Entry" to begin.</p>';
+
+            return `
+                <div class="text-center">
+                    <button onclick="changePage('step1')" class="btn-primary mb-6">
+                        + Start New Entry
+                    </button>
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700">Past Entries (${entries.length})</h2>
+                    <ul class="max-h-80 overflow-y-auto p-2">
+                        ${entryListHtml}
+                    </ul>
+                </div>
+            `;
+        }
+
+        /**
+         * Renders Step 1: Title and Summary.
+         */
+        function renderStep1() {
+            return `
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Step 1: Title & Overview</h2>
+                <div class="space-y-4">
+                    <label for="entryTitle" class="block text-sm font-medium text-gray-700">Journal Title</label>
+                    <input type="text" id="entryTitle" value="${currentEntry.title || ''}"
+                           class="w-full p-3 border border-gray-300 rounded-lg focus:ring-gray-500 focus:border-gray-500"
+                           placeholder="What is the focus of today's entry?">
+                           
+                    <label for="entrySummary" class="block text-sm font-medium text-gray-700 pt-4">Brief Summary / Keywords</label>
+                    <textarea id="entrySummary" rows="3"
+                              class="w-full p-3 border border-gray-300 rounded-lg resize-none focus:ring-gray-500 focus:border-gray-500"
+                              placeholder="Key themes or a short summary (optional)">${currentEntry.summary || ''}</textarea>
+                </div>
+                <div class="flex justify-end space-x-4 mt-6">
+                    <button onclick="changePage('dashboard')" class="btn-secondary">Cancel</button>
+                    <button onclick="saveStep1()" class="btn-primary">Next: Main Reflection &rarr;</button>
+                </div>
+            `;
+        }
+
+        /**
+         * Renders Step 2: Main Reflection.
+         */
+        function renderStep2() {
+            return `
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Step 2: Main Reflection</h2>
+                <div class="space-y-4">
+                    <label for="entryContent" class="block text-sm font-medium text-gray-700">Full Entry / Details</label>
+                    <textarea id="entryContent" rows="12"
+                              class="w-full p-3 border border-gray-300 rounded-lg resize-none focus:ring-gray-500 focus:border-gray-500"
+                              placeholder="Write your detailed thoughts and reflections here.">${currentEntry.content || ''}</textarea>
+                </div>
+                <div class="flex justify-between space-x-4 mt-6">
+                    <button onclick="changePage('step1')" class="btn-secondary">&larr; Previous</button>
+                    <button onclick="saveStep2()" class="btn-primary">Next: Review &rarr;</button>
+                </div>
+            `;
+        }
+
+        /**
+         * Renders Step 3: Review and Submit.
+         */
+        function renderStep3() {
+            return `
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Step 3: Review & Submit</h2>
+                <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-4 max-h-96 overflow-y-auto">
+                    <div class="border-b pb-2">
+                        <div class="text-sm font-medium text-gray-500">Title</div>
+                        <div class="text-xl font-bold text-gray-800">${currentEntry.title || 'No Title'}</div>
+                    </div>
+                    <div class="border-b pb-2">
+                        <div class="text-sm font-medium text-gray-500">Summary</div>
+                        <div class="text-gray-700 whitespace-pre-wrap">${currentEntry.summary || 'N/A'}</div>
+                    </div>
+                    <div>
+                        <div class="text-sm font-medium text-gray-500">Main Content</div>
+                        <div class="text-gray-700 whitespace-pre-wrap">${currentEntry.content || 'No Content'}</div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-between space-x-4 mt-6">
+                    <button onclick="changePage('step2')" class="btn-secondary">&larr; Previous</button>
+                    <button onclick="submitEntry()" class="btn-primary">Submit Entry</button>
+                </div>
+            `;
+        }
+        
+        // --- State Management Functions ---
+
+        /**
+         * Changes the current page state and re-renders the UI.
+         */
+        window.changePage = function(page) {
+            currentPage = page;
+            renderUI();
+        }
+
+        /**
+         * Clears the current entry data and goes to step 1.
+         */
+        window.resetEntry = function() {
+            currentEntry = {};
+            changePage('step1');
+        }
+
+        /**
+         * Saves data from Step 1 UI to currentEntry object and moves to Step 2.
+         */
+        window.saveStep1 = function() {
+            const title = document.getElementById('entryTitle').value.trim();
+            const summary = document.getElementById('entrySummary').value.trim();
+
+            if (!title) {
+                document.getElementById('status-message').textContent = "Please provide a title for your entry.";
+                document.getElementById('status-message').className = "text-center text-sm font-medium text-red-600 mb-4";
+                return;
+            }
+
+            currentEntry.title = title;
+            currentEntry.summary = summary;
+            
+            document.getElementById('status-message').textContent = ""; // Clear error
+            changePage('step2');
+        }
+
+        /**
+         * Saves data from Step 2 UI to currentEntry object and moves to Step 3.
+         */
+        window.saveStep2 = function() {
+            const content = document.getElementById('entryContent').value.trim();
+            
+            if (!content) {
+                document.getElementById('status-message').textContent = "Please provide some main content for your reflection.";
+                document.getElementById('status-message').className = "text-center text-sm font-medium text-red-600 mb-4";
+                return;
+            }
+
+            currentEntry.content = content;
+            
+            document.getElementById('status-message').textContent = ""; // Clear error
+            changePage('step3');
+        }
+
+        /**
+         * Submits the final entry to localStorage.
+         */
+        window.submitEntry = function() {
+            const statusMessage = document.getElementById('status-message');
+            
+            // Add a timestamp and push to the entries array
+            currentEntry.timestamp = new Date().toISOString();
+            entries.push(currentEntry);
+            
+            // Sort entries by timestamp (newest first)
+            entries.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            // Save the updated list to local storage
+            saveEntriesToLocalStorage();
+
+            statusMessage.textContent = `Entry successfully saved locally!`;
+            statusMessage.className = "text-center text-sm font-medium text-green-600 mb-4";
+
+            // Reset the current entry and go back to the dashboard
+            currentEntry = {};
+            changePage('dashboard');
+        }
+
+        // Start the application setup
+        setupLocalStorage();
+
+    </script>
+</body>
+</html>
